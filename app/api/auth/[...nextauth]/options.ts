@@ -1,5 +1,6 @@
 import GoogleProvider from "next-auth/providers/google"
 import GitHubProvider from "next-auth/providers/github"
+import CredentialsProvider from "next-auth/providers/credentials"
 import type { Provider } from "next-auth/providers"
 import { env } from "../../../env"
 import { CallbacksOptions } from "next-auth"
@@ -22,8 +23,30 @@ const providers: Provider[] = [
   }),
 ]
 
+if (env.NODE_ENV === "development") {
+  providers.push(
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (credentials) => {
+        if (credentials?.username === "admin" && credentials?.password === "admin") {
+          return { id: "1", name: "admin", email: "satoshi@flashapp.me" }
+        }
+        return null
+      },
+    }),
+  )
+}
+
 const callbacks: Partial<CallbacksOptions> = {
-  async signIn({ account, profile }) {
+  async signIn({ account, profile, user }) {
+    if (account?.provider === "credentials" && env.NODE_ENV === "development") {
+      return !!user
+    }
+
     if (!account || !profile) {
       return false
     }
@@ -33,15 +56,9 @@ const callbacks: Partial<CallbacksOptions> = {
       return false
     }
 
-    if (account.provider === "google") {
-      const verified = new Boolean("email_verified" in profile && profile.email_verified)
-      return verified && env.AUTHORIZED_EMAILS.includes(email)
-    }
-
-    if (account.provider === "github") {
-      return env.AUTHORIZED_EMAILS.includes(email)
-    }
-    return false
+    // eslint-disable-next-line no-new-wrappers
+    const verified = new Boolean("email_verified" in profile && profile.email_verified)
+    return verified && env.AUTHORIZED_EMAILS.includes(email)
   },
 }
 
